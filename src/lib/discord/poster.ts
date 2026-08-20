@@ -72,6 +72,59 @@ export function matchGuildSubscription(
   }
 }
 
+// REST helper to send Discord messages across serverless Vercel / Gateway
+async function sendDiscordChannelMessage(
+  channelId: string,
+  content: string | undefined,
+  embedPayload: any
+): Promise<string> {
+  const client = getDiscordClient();
+  const token = process.env.DISCORD_BOT_TOKEN;
+
+  // 1. If active WebSocket gateway client is available
+  if (client && client.isReady()) {
+    const channel = await client.channels.fetch(channelId);
+    if (channel && channel.isTextBased()) {
+      const sent = await (channel as any).send({
+        content,
+        embeds: embedPayload.embeds,
+        components: embedPayload.components,
+      });
+      return sent.id;
+    }
+  }
+
+  // 2. Direct HTTP REST API (for Vercel Serverless / Cron execution)
+  if (token && !token.startsWith('mock_')) {
+    const jsonEmbeds = embedPayload.embeds.map((e: any) => (typeof e.toJSON === 'function' ? e.toJSON() : e));
+    const jsonComponents = embedPayload.components.map((c: any) => (typeof c.toJSON === 'function' ? c.toJSON() : c));
+
+    const res = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bot ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        content,
+        embeds: jsonEmbeds,
+        components: jsonComponents,
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return data.id;
+    } else {
+      const errText = await res.text();
+      throw new Error(`Discord REST API ${res.status}: ${errText}`);
+    }
+  }
+
+  // Simulated / Mock for local development
+  return `mock_msg_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+}
+
 export async function dispatchDiscordAlertsForNewHackathon(hackathon: any) {
   const guilds = await prisma.discordGuild.findMany({
     where: {
@@ -83,7 +136,6 @@ export async function dispatchDiscordAlertsForNewHackathon(hackathon: any) {
     },
   });
 
-  const client = getDiscordClient();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
   for (const guild of guilds) {
@@ -116,23 +168,15 @@ export async function dispatchDiscordAlertsForNewHackathon(hackathon: any) {
       : undefined;
 
     try {
-      let messageId = `mock_msg_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+      const messageId = await sendDiscordChannelMessage(
+        guild.postingChannelId,
+        content,
+        embedPayload
+      );
 
-      if (client && client.isReady()) {
-        const channel = await client.channels.fetch(guild.postingChannelId);
-        if (channel && channel.isTextBased()) {
-          const sent = await (channel as any).send({
-            content,
-            embeds: embedPayload.embeds,
-            components: embedPayload.components,
-          });
-          messageId = sent.id;
-        }
-      } else {
-        console.log(
-          `[Poster] (Mock Client) Dispatched new hackathon post "${hackathon.name}" to guild ${guild.guildName} #${guild.postingChannelId}`
-        );
-      }
+      console.log(
+        `[Poster] Dispatched new hackathon post "${hackathon.name}" to guild ${guild.guildName} #${guild.postingChannelId}`
+      );
 
       // Record in DiscordPost table to ensure deduplication across restarts
       await prisma.discordPost.create({
@@ -170,7 +214,6 @@ export async function dispatchDiscordAlertsForChanges(
     },
   });
 
-  const client = getDiscordClient();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
   for (const guild of guilds) {
@@ -205,23 +248,15 @@ export async function dispatchDiscordAlertsForChanges(
     }
 
     try {
-      let messageId = `mock_update_${Date.now()}`;
+      const messageId = await sendDiscordChannelMessage(
+        guild.postingChannelId,
+        guild.subscription.pingRoleId ? `<@&${guild.subscription.pingRoleId}>` : undefined,
+        payload
+      );
 
-      if (client && client.isReady()) {
-        const channel = await client.channels.fetch(guild.postingChannelId);
-        if (channel && channel.isTextBased()) {
-          const sent = await (channel as any).send({
-            content: guild.subscription.pingRoleId ? `<@&${guild.subscription.pingRoleId}>` : undefined,
-            embeds: payload.embeds,
-            components: payload.components,
-          });
-          messageId = sent.id;
-        }
-      } else {
-        console.log(
-          `[Poster] (Mock Client) Dispatched ${postType} alert for "${hackathon.name}" to guild ${guild.guildName}`
-        );
-      }
+      console.log(
+        `[Poster] Dispatched ${postType} alert for "${hackathon.name}" to guild ${guild.guildName}`
+      );
 
       await prisma.discordPost.create({
         data: {
