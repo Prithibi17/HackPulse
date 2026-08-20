@@ -1,0 +1,52 @@
+{
+  "name": "hackpulse",
+  "version": "1.0.0",
+  "description": "HackPulse — Hackathon Discovery Web App + Discord Bot",
+  "main": "src/app/page.tsx",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:push": "prisma db push",
+    "db:generate": "prisma generate",
+    "db:seed": "tsx prisma/seed.ts",
+    "bot": "tsx src/lib/discord/bot-runner.ts",
+    "worker": "tsx src/lib/scheduler/worker-runner.ts",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "hackathons",
+    "discord-bot",
+    "crawler",
+    "nextjs",
+    "prisma"
+  ],
+  "author": "HackRadar Team",
+  "license": "MIT",
+  "dependencies": {
+    "@prisma/client": "6.4.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
+    "discord.js": "^14.27.0",
+    "lucide-react": "^1.33.0",
+    "next": "^16.3.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tailwind-merge": "^3.6.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "autoprefixer": "^10.5.4",
+    "postcss": "^8.5.26",
+    "prisma": "6.4.1",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  }
+}

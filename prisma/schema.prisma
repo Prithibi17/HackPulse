@@ -1,0 +1,289 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String          @id @default(cuid())
+  discordId     String          @unique
+  username      String
+  discriminator String?
+  avatar        String?
+  email         String?
+  role          String          @default("USER") // USER | ADMIN
+  savedEvents   SavedHackathon[]
+  reminders     HackathonReminder[]
+  teamRequests  TeamRequest[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+}
+
+model DiscordGuild {
+  id               String              @id @default(cuid())
+  guildId          String              @unique
+  guildName        String
+  icon             String?
+  postingChannelId String?
+  timezone         String              @default("Asia/Kolkata")
+  enabled          Boolean             @default(true)
+  subscription     GuildSubscription?
+  posts            DiscordPost[]
+  joinedAt         DateTime            @default(now())
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+}
+
+model GuildSubscription {
+  id                 String       @id @default(cuid())
+  guildId            String       @unique
+  guild              DiscordGuild @relation(fields: [guildId], references: [guildId], onDelete: Cascade)
+  modes              String       @default("[\"ONLINE\",\"OFFLINE\",\"HYBRID\"]") // JSON array of modes
+  countries          String       @default("[]") // JSON array
+  states             String       @default("[]") // JSON array e.g. ["Rajasthan", "Karnataka"]
+  cities             String       @default("[]") // JSON array e.g. ["Jaipur", "Bengaluru"]
+  themes             String       @default("[]") // JSON array e.g. ["AI", "IoT", "Web3"]
+  minPrize           Int          @default(0)
+  studentsOnly       Boolean      @default(false)
+  newHackathons      Boolean      @default(true)
+  registrationAlerts Boolean      @default(true)
+  deadlineAlerts     Boolean      @default(true)
+  changeAlerts       Boolean      @default(true)
+  dailyDigest        Boolean      @default(false)
+  pingRoleId         String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+}
+
+model UserSubscription {
+  id                String   @id @default(cuid())
+  discordUserId     String   @unique
+  modes             String   @default("[\"ONLINE\",\"OFFLINE\",\"HYBRID\"]") // JSON array
+  countries         String   @default("[]")
+  states            String   @default("[]")
+  cities            String   @default("[]")
+  themes            String   @default("[]")
+  minimumPrize      Int      @default(0)
+  deadlineReminders Boolean  @default(true)
+  dmEnabled         Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model Hackathon {
+  id                   String                  @id @default(cuid())
+  name                 String
+  slug                 String                  @unique
+  description          String
+  organizerName        String
+  organizerWebsite     String?
+  organizerLogo        String?
+  mode                 String                  @default("ONLINE") // ONLINE | OFFLINE | HYBRID
+  venueName            String?
+  city                 String?
+  state                String?
+  country              String?                 @default("India")
+  latitude             Float?
+  longitude            Float?
+  prizePool            Int?
+  prizeCurrency        String                  @default("INR")
+  registrationStatus   String                  @default("OPEN") // UPCOMING | OPEN | CLOSED | CLOSING_SOON | POSTPONED | UNKNOWN
+  registrationOpenDate DateTime?
+  registrationDeadline DateTime?
+  eventStartDate       DateTime?
+  eventEndDate         DateTime?
+  teamMin              Int                     @default(1)
+  teamMax              Int                     @default(4)
+  eligibility          String                  @default("Open to all")
+  themes               String                  @default("[]") // JSON array string
+  technologies         String                  @default("[]") // JSON array string
+  registrationUrl      String
+  officialWebsite      String?
+  bannerImage          String?
+  sourceName           String                  @default("Manual")
+  sourceUrl            String?
+  verified             Boolean                 @default(true)
+  verificationStatus   String                  @default("VERIFIED") // VERIFIED | PARTIALLY_VERIFIED | UNVERIFIED | CONFLICT
+  verificationNote     String?
+  isPostponed          Boolean                 @default(false)
+  isCancelled          Boolean                 @default(false)
+  firstSeenAt          DateTime                @default(now())
+  lastSeenAt           DateTime                @default(now())
+  lastCheckedAt        DateTime                @default(now())
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+
+  sources              HackathonSourceRecord[]
+  changes              HackathonChange[]
+  savedBy              SavedHackathon[]
+  reminders            HackathonReminder[]
+  teamRequests         TeamRequest[]
+  discordPosts         DiscordPost[]
+
+  @@index([mode])
+  @@index([city])
+  @@index([state])
+  @@index([registrationStatus])
+  @@index([registrationDeadline])
+  @@index([eventStartDate])
+}
+
+model HackathonSourceRecord {
+  id           String    @id @default(cuid())
+  hackathonId  String
+  hackathon    Hackathon @relation(fields: [hackathonId], references: [id], onDelete: Cascade)
+  sourceName   String
+  sourceId     String?
+  sourceUrl    String
+  rawData      String?   // Raw extracted JSON string
+  isCanonical  Boolean   @default(false)
+  discoveredAt DateTime  @default(now())
+  lastSyncedAt DateTime  @default(now())
+
+  @@unique([sourceName, sourceUrl])
+  @@index([hackathonId])
+}
+
+model HackathonChange {
+  id            String    @id @default(cuid())
+  hackathonId   String
+  hackathon     Hackathon @relation(fields: [hackathonId], references: [id], onDelete: Cascade)
+  field         String    // deadline, registrationStatus, prizePool, venueName, mode, eventStartDate, isPostponed
+  previousValue String?
+  newValue      String?
+  detectedAt    DateTime  @default(now())
+  source        String?
+  notified      Boolean   @default(false)
+
+  @@index([hackathonId])
+  @@index([detectedAt])
+}
+
+model SavedHackathon {
+  id            String    @id @default(cuid())
+  userId        String?
+  user          User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  discordUserId String
+  hackathonId   String
+  hackathon     Hackathon @relation(fields: [hackathonId], references: [id], onDelete: Cascade)
+  notes         String?
+  savedAt       DateTime  @default(now())
+
+  @@unique([discordUserId, hackathonId])
+  @@index([discordUserId])
+}
+
+model HackathonReminder {
+  id            String    @id @default(cuid())
+  userId        String?
+  user          User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  discordUserId String
+  hackathonId   String
+  hackathon     Hackathon @relation(fields: [hackathonId], references: [id], onDelete: Cascade)
+  guildId       String?
+  channelId     String?
+  triggerTime   DateTime
+  reminderType  String    // 7_DAYS | 3_DAYS | 1_DAY | 6_HOURS
+  status        String    @default("PENDING") // PENDING | SENT | CANCELLED
+  sentAt        DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([status, triggerTime])
+  @@index([discordUserId, hackathonId])
+}
+
+model TeamRequest {
+  id               String    @id @default(cuid())
+  hackathonId      String
+  hackathon        Hackathon @relation(fields: [hackathonId], references: [id], onDelete: Cascade)
+  userId           String?
+  user             User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  guildId          String
+  channelId        String
+  threadId         String?
+  authorId         String
+  authorName       String
+  authorAvatar     String?
+  rolesNeeded      String    // e.g. "1 AI/ML Dev, 1 UI/UX Designer"
+  skills           String    // e.g. "Python, PyTorch, Figma"
+  teamSizeNeeded   Int       @default(2)
+  message          String
+  status           String    @default("OPEN") // OPEN | CLOSED
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([hackathonId])
+  @@index([guildId])
+}
+
+model CrawlerRun {
+  id               String             @id @default(cuid())
+  startedAt        DateTime           @default(now())
+  completedAt      DateTime?
+  status           String             @default("RUNNING") // RUNNING | COMPLETED | FAILED
+  eventsDiscovered Int                @default(0)
+  eventsCreated    Int                @default(0)
+  eventsUpdated    Int                @default(0)
+  duplicateCount   Int                @default(0)
+  errorCount       Int                @default(0)
+  errors           String?            // JSON array string
+  durationMs       Int?
+  sourceRuns       CrawlerSourceRun[]
+  createdAt        DateTime           @default(now())
+}
+
+model CrawlerSourceRun {
+  id           String     @id @default(cuid())
+  crawlerRunId String
+  crawlerRun   CrawlerRun @relation(fields: [crawlerRunId], references: [id], onDelete: Cascade)
+  sourceName   String
+  status       String     @default("SUCCESS") // SUCCESS | ERROR | PARTIAL
+  eventsFound  Int        @default(0)
+  responseTimeMs Int      @default(0)
+  errorMessage String?
+  createdAt    DateTime   @default(now())
+
+  @@index([crawlerRunId])
+  @@index([sourceName])
+}
+
+model DiscordPost {
+  id          String    @id @default(cuid())
+  guildId     String
+  guild       DiscordGuild @relation(fields: [guildId], references: [guildId], onDelete: Cascade)
+  channelId   String
+  messageId   String
+  hackathonId String
+  hackathon   Hackathon @relation(fields: [hackathonId], references: [id], onDelete: Cascade)
+  postType    String    @default("NEW_EVENT") // NEW_EVENT | DEADLINE_ALERT | POSTPONED | UPDATE
+  postedAt    DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([guildId, channelId, hackathonId, postType])
+  @@index([guildId, hackathonId])
+}
+
+model AdminAuditLog {
+  id          String   @id @default(cuid())
+  action      String   // HACKATHON_CREATE | HACKATHON_UPDATE | DUPLICATE_MERGE | VERIFY | POSTPONE | CANCEL | CRAWLER_TRIGGER
+  entityType  String   // Hackathon | DiscordGuild | Crawler
+  entityId    String
+  details     String?  // JSON details
+  performedBy String   @default("SYSTEM")
+  createdAt   DateTime @default(now())
+
+  @@index([action])
+  @@index([entityType, entityId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  type      String   // INFO | SUCCESS | WARNING | ERROR
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
